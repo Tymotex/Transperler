@@ -1,9 +1,11 @@
 #!/bin/dash
 for c_file in *.c
 do
-    gcc -c $c_file
+    echo $c_file
     for h_file in *.h
     do
-        echo I eat ass
+        echo $h_file
+        # This is a comment
+        echo I love perl
     done
 done
