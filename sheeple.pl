@@ -2,6 +2,11 @@
 use warnings;
 use Term::ANSIColor;
 
+if ($#ARGV < 0) {
+    print("Usage: sheeple <shell file>\n");
+    exit(1);
+}
+
 sub printC($) {
     print colored(sprintf($_[0]), "yellow");
 }
@@ -39,6 +44,7 @@ sub stripIndent(\$) {
     return $line;
 }
 
+
 sub processForLoop(\@$$) {
     my @lines = @{$_[0]};
     my $i = $_[1];
@@ -46,7 +52,7 @@ sub processForLoop(\@$$) {
     printD("===== Processing For Loop =====\n");
     printD("===> Line number: $i\n");
     printD("===> Line:        $line\n");
-
+    # TODO: Repeat the regex match
     my $subject = $1;
     my $iterable = $2;
     my $convertedLine = "for \$$1 (glob(\"$2\")) ";
@@ -94,6 +100,13 @@ sub processSystemCommand(\@$$) {
     return $convertedLine;
 }
 
+sub processEcho() {
+    my $line = $_[0];
+    $line =~ /echo (.*)/;
+    my $convertedLine = "print \"($1)\"\n";
+    return $convertedLine;
+}
+
 
 # Opening the input shell file for reading and creating the output perl file for writing
 $inputFileName = $ARGV[0];
@@ -102,7 +115,7 @@ $outputFileName = $inputFileName =~ s/\.[^.]+$//;
 $outputFileName .= ".pl";
 open my $perlFile, ">", "$inputFileName.pl" or die("Couldn't create file: $!\n");
 
-# Write the hashbang line
+# Writing the hashbang line
 $perlPath = `which perl`;
 chomp $perlPath;
 print $perlFile "#!$perlPath -w\n";
@@ -130,7 +143,18 @@ for ($i = 0; $i <= $#inputLines; $i++) {
     }
     else {
         # Reached a line of 'standard' shell code
+
+        # 
+
+        # Expanding variables
+        
+        # Checking if this line is running a built-in command
+
+
+        # Treating this line as a system command
         print $perlFile processSystemCommand(@inputLines, $i, $currLine);
+
+
     }
 }
 

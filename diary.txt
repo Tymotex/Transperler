@@ -1,6 +1,0 @@
-Start: 21:20
-End: 22:45
-Activity: coding
-Comments: initial setup and familiarisation
-
-
