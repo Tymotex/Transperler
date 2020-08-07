@@ -2,13 +2,17 @@
 use warnings;
 use Term::ANSIColor;
 use Scalar::Util qw(looks_like_number);
-
-my $debugging = 0;
+use FindBin;
+use lib $FindBin::Bin;
 
 if ($#ARGV < 0) {
     print("Usage: sheeple <shell file>\n");
     exit(1);
 }
+
+# ===== Debugging =====
+
+$debugging = 0;
 
 sub printC($) {
     if ($debugging) {
@@ -28,8 +32,9 @@ sub printE($) {
     }
 }
 
-# Returns the level of indentation for a given string 
-# TODO: not robust?
+# ===== Utilities =====
+
+# Returns the level of indentation for a given string TODO: not robust?
 sub getIndentLevel($) {
     my $line = $_[0];
     my @tabs = $line =~ /\G\s/g;
@@ -73,6 +78,8 @@ sub wrapQuotesForStrings(\@) {
     }
     return @lines;
 }
+
+# ===== Constructs Processing ===== 
 
 sub processForLoop(\@$$) {
     my @lines = @{$_[0]};
