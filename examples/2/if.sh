@@ -1,7 +1,13 @@
 #!/bin/dash
-if test Andrew = great
+if test Tim = Zhang
 then
-    echo correct
-else
-    echo error
+    if test Andrew = great
+    then
+        echo correct
+    elif test Andrew = god
+    then
+        echo indeed
+    else
+        echo error
+    fi
 fi

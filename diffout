@@ -1,0 +1,19 @@
+Using "$*":
+one two three four
+-e 
+Using $*:
+one
+two
+three
+four
+-e 
+Using "$@":
+one
+two
+three four
+-e 
+Using $@:
+one
+two
+three
+four

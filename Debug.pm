@@ -3,7 +3,7 @@ package Debug;
 $debugging = 0;
 
 sub enableDebug($) {
-    $debugging = 1;
+    $debugging
 }
 
 sub printC($) {
