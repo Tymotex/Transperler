@@ -39,6 +39,6 @@ sub processGlobbing($) {
     return join(" ", @newTokens);
 }
 
-$str = "*.c ?.tasd";
+$str = "echo My fifth argument is \$5";
 $str = processGlobbing($str);
 print("$str\n");

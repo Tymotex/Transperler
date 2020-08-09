@@ -73,7 +73,7 @@ sub processGlobbing($) {
         my $j = $i;
         my $token = $tokens[$i];
         my $isGlob = 0;
-        while ($token =~ /(\S*)\*(\S*)/ or $token =~ /(\S*)\?(\S*)/ or $token =~ /(\S*)\[.*\](\S*)/) {
+        while ($token =~ /(\S*)\*(\S*)/ or $token =~ /(\S*)\?(\S*)/ or ($token !~ /\$/ and $token =~ /\S*\[.+\]\S*/)) {
             $isGlob = 1;
             last if ($j >= $#tokens);
             $j++;
@@ -240,7 +240,7 @@ sub processSystemCommand(\@$$) {
     my $i = $_[1];
     my $line = $_[2];
     printD("===== Processing 'done' =====\n");
-    my $convertedLine = "system(\"$currLine\");\n";
+    my $convertedLine = "system(\"$$line\");\n";
     printE("===> Converted:   $convertedLine\n");
     printD("===============================\n");
     return $convertedLine;
@@ -550,42 +550,35 @@ sub processArithmetic {
 
 # ========================================================================================
 
-# Opening the input shell file for reading and creating the output perl file for writing
-$inputFileName = $ARGV[0];
-open my $inputFile, "<", "$inputFileName" or die("Couldn't open file: $!\n");
-$outputFileName = $inputFileName =~ s/\.[^.]+$//;
-$outputFileName .= ".pl";
-open my $perlFile, ">", "$inputFileName.pl" or die("Couldn't create file: $!\n");
+# TODO: temp prototypes
+sub processLine($\@$$);
+sub processSwitchCase($$\@$$);
 
-if (!$debugging) {
-    $perlFile = STDOUT;
-}
+# Returns how many lines to skip 
+sub processLine($\@$$) {
+    no warnings;
+    my $perlFile = $_[0];
+    my @lines = @{$_[1]};
+    my $i = $_[2];
+    my $indentationShift = $_[3];   # How many levels of indentation to add (can be negative)
 
-# Writing the hashbang line
-$perlPath = `which perl`;
-chomp $perlPath;
-print $perlFile "#!$perlPath -w\n";
-
-@inputLines = <$inputFile>;
-
-for ($i = 0; $i <= $#inputLines; $i++) {
-    $currLine = $inputLines[$i];
+    my $currLine = $lines[$i];
     chomp $currLine;
     $indentLevel = getIndentLevel($currLine);
     $currLine = stripIndent($currLine);
-    # print("===> $currLine\n");
-    next if ($currLine =~ /^#!/);    # Skip the hashbang line
+    # print("===> Main: $currLine\n");
+    return 0 if ($currLine =~ /^#!/);    # Skip the hashbang line   TODO This okay?
 
-    my $tabs = ' ' x $indentLevel;
-
-    
-
+    my $tabs = ' ' x ($indentLevel + 4 * $indentationShift);  # TODO: shitty code
+      
     # Search and replace shell's special variables, where they occur
     $currLine = substituteSpecialVars($currLine);
-    # $currLine = processGlobbing($currLine);  # TODO:
+    $currLine = processGlobbing($currLine);  # TODO:
 
     $currLine = processArithmetic($currLine);
     $currLine = processCommandSubstitution($currLine);
+
+    my $linesToSkip = 0;
 
     # Inline comment
     if ($currLine =~ /(.*)[^\$](#.*)/) { 
@@ -600,7 +593,6 @@ for ($i = 0; $i <= $#inputLines; $i++) {
     # For loops and while loops:
     if ($currLine =~ /for (.+) in (.+)/) {
         print $perlFile $tabs;
-        $currLine = processGlobbing($currLine);
         print $perlFile processForLoop(@inputLines, $i, $currLine);
     }
     elsif ($currLine =~ /while (.+)/) {
@@ -657,7 +649,7 @@ for ($i = 0; $i <= $#inputLines; $i++) {
         elsif ($currLine !~ /\S+/) {
             print $perlFile $tabs;
             print $perlFile "\n";
-            next;
+            return 0;  # TODO This okay?
         }
 
         # Checking if this line is running a built-in command
@@ -683,11 +675,111 @@ for ($i = 0; $i <= $#inputLines; $i++) {
             print $perlFile processExit($currLine);
         }
 
+        # Case?
+        elsif ($currLine =~ /^case (.*) in/) {
+            my $caseVar = $1;
+            # Start processing the switch case on the next line (first case)
+            $linesToSkip += processSwitchCase($perlFile, $caseVar, @lines, $i + 1, $indentationShift - 1);
+        }   
+        elsif ($currLine =~ /^esac/) {  # TODO: shouldnt have this
+            return 0;
+        }
+
         # Treating this line as a system command
         else {
             print $perlFile processSystemCommand(@inputLines, $i, $currLine);
         }
     }
+    # print("============================== SKIP $linesToSkip\n");
+    return $linesToSkip;
+}
+
+sub processSwitchCase($$\@$$) {
+    no warnings;
+    my $perlFile = $_[0];
+    my $caseVar = $_[1];
+    my @lines = @{$_[2]};
+    my $lineIndex = $_[3];
+    my $indentationShift = $_[4];   # How many levels of indentation to add (can be negative)
+
+    my $isFirstCase = 1;
+    my $currLine = $lines[$lineIndex];
+
+    my $linesProcessed = 0;
+    while ($currLine !~ /esac/) {
+        $currLine =~ /(\S+)\)/;
+        my $indentLevel = getIndentLevel($currLine);
+        $currLine = stripIndent($currLine);
+        my $case = $1;
+        if (isRawString($case)) {
+            $case = wrapQuotes $case;
+        } 
+        my $tabs = ' ' x ($indentLevel + 4 * $indentationShift);
+        # print("===> Handling: $currLine\n");
+        $linesProcessed++;
+        if ($isFirstCase) {
+            # print("===> Converted to: if ($caseVar eq $case) {\n");
+            print $perlFile $tabs;  
+            print $perlFile ("if ($caseVar eq $case) {\n");
+            $isFirstCase = 0;
+        } else {
+            if ($currLine =~ /[;]{2}/) {
+                $tabs = ' ' x ($indentLevel + 4 * ($indentationShift - 1));
+                print $perlFile $tabs;
+                print $perlFile ("}\n");
+            }
+            elsif ($currLine =~ /^\*\)/) {
+                print $perlFile $tabs;
+                print $perlFile ("else {\n");
+            }
+            elsif ($currLine =~ /(\S+)\)/) {   # TODO: No need to do this twice
+                $case = $1;
+                print $perlFile $tabs;
+                print $perlFile ("elsif ($caseVar eq $case) {\n");
+            }
+            else {
+                # Regular command here
+                $linesProcessed += processLine($perlFile, @lines, $lineIndex + $linesProcessed - 1, $indentationShift);
+            }
+        }
+        $currLine = $lines[$lineIndex + $linesProcessed];
+    }
+    return $linesProcessed + 1;
+}
+
+# ========================================================================================
+
+
+# Opening the input shell file for reading and creating the output perl file for writing
+$inputFileName = $ARGV[0];
+open my $inputFile, "<", "$inputFileName" or die("Couldn't open file: $!\n");
+$outputFileName = $inputFileName =~ s/\.[^.]+$//;
+$outputFileName .= ".pl";
+open my $perlFile, ">", "$inputFileName.pl" or die("Couldn't create file: $!\n");
+
+if (!$debugging) {
+    $perlFile = STDOUT;
+}
+
+# Writing the hashbang line
+$perlPath = `which perl`;
+chomp $perlPath;
+print $perlFile "#!$perlPath -w\n";
+
+@inputLines = <$inputFile>;
+$inputs = join("", @inputLines);      # Preprocessing the shell code so that semicolons become newlines - but leaving double semicolon untouched
+$inputs =~ s/(?<!;);(?!;)\s*/\n/g;    # TODO: Need to also pad with correct indentiation after the newline
+@inputLines = split(/\n/, $inputs);
+
+# print ("=====ORIGINAL LINES:=====\n");
+# foreach $inputLine (@inputLines) {
+#     print("$inputLine\n");
+# }
+# print("========================\n");
+
+for ($i = 0; $i <= $#inputLines; $i++) {
+    # print("Passing in $inputLines[$i]\n");
+    $i += processLine($perlFile, @inputLines, $i, 0);
 }
 
 # Closing the output file
