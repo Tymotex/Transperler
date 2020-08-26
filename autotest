@@ -1,4 +1,0 @@
-#!/bin/sh
-
-subsetNum=$1;
-2041 autotest sheeple $subsetNum sheeple.pl

@@ -5,178 +5,486 @@ use Scalar::Util qw(looks_like_number);
 use FindBin;
 use lib $FindBin::Bin;
 
-if ($#ARGV < 0) {
-    print("Usage: sheeple <shell file>\n");
-    exit(1);
-}
+# ===== INFO TO MARKER =====
+# Did not cover subset 4's mv and ls
+# Did not fully cover subset 4's io redirection (only works with redirecting echo's output)
+# Did not support nested usage of $() or ``
 
-# ===== Debugging =====
+# ===== Prototypes =====
+sub getIndentLevel($);
+sub stripIndent(\$);
+sub globConsecutive(@);
+sub requiresGlob($);
+sub processGlobbing($);
+sub escapeCharacters($@);
+sub wipeBackslashes($);
+sub isVariable;
+sub isFunctionCall($);
+sub isRawString($);
+sub wrapQuotes($);
+sub wrapQuotesList(@);
+sub tokenise;
+sub processCondition($);
+sub processCommandSubstitution;
+sub processArithmetic;
+sub getCommandName($);
+sub processForLoop($);
+sub processDo($);
+sub processDone($);
+sub processSystemCommand($);
+sub processAssignment($);
+sub processComment($);
+sub processFunction;
+sub processLocal;
+sub processReturn;
+sub processIf($);
+sub processThen($);
+sub processElse($);
+sub processElif($);
+sub processFi;
+sub processWhileLoop;
+sub processEcho($);
+sub processCd($);
+sub processRead($);
+sub processExit($);
+sub processTest($);
+sub processExpr($);
+sub substituteSpecialVars($);
+sub processAndOrHelper;
+sub processAndOr;
+sub processIORedirection;
+sub processChmod($);
+sub processRm($);
+sub processLine($\@$$);
+sub processSwitchCase($$\@$$);
 
-$debugging = 0;
+# |===================== Utilities =====================|
 
-sub printC($) {
-    if ($debugging) {
-        print colored(sprintf($_[0]), "yellow");
-    }
-}
-
-sub printD($) {
-    if ($debugging) {
-        print colored(sprintf($_[0]), "blue");
-    }
-}
-
-sub printE($) {
-    if ($debugging) {
-        print colored(sprintf($_[0]), "green");
-    }
-}
-
-# ===== Utilities =====
-
-# Returns the level of indentation for a given string TODO: not robust?
+# Returns the level of indentation for a given string
+# Eg. getIndentLevel("    hello") returns 4
 sub getIndentLevel($) {
     my $line = $_[0];
-    my @tabs = $line =~ /\G\s/g;
-    my $tabCount = @tabs;
-    return $tabCount; 
+    my @indents = $line =~ /\G\s/g;
+    my $indentCount = @indents;
+    return $indentCount; 
 }
 
-# Strips leading tabs
-# TODO: accept references instead? To modify inplace
+# Strips leading space characters.
+# Eg. stripIndent("    hello") returns "hello"
 sub stripIndent(\$) {
     my $line = ${$_[0]};
     $line =~ s/^\s*//;
     return $line;
 }
 
-sub processGlob($) {
-    my $line = $_[0];
-    printE("Globbing: $line\n");
-    $line =~ s/(\S*)\*(\S*)/glob("$1*$2")/g;
+# Given a list of strings containing glob patterns, wraps
+# them with 'glob(...)' and returns a string of the joined
+# glob calls wrapped by parentheses
+# Eg. globConsecutive((*.c, *.h)) returns the string: (glob("*.c"),glob("*.h"))
+sub globConsecutive(@) {
+    my @args = @_;
+    my @globbedArgs = ();
+    foreach my $arg (@args) {
+        push(@globbedArgs, "glob(\"$arg\")");
+    }
+    my $globbedArgsJoined = "(" . join(",", @globbedArgs) . ")";
+    return $globbedArgsJoined;
+}
 
-    $globbed = $line;
-    printE("Globbed:  $globbed\n");
+# Given a line, checks if it contains a glob pattern
+# Eg. requiresGlob("*.c") returns 1 while requiresGlob("a.c") returns 0
+sub requiresGlob($) {
+    my $line = $_[0];
+    if ($line =~ /(\S*)\*(\S*)/ or 
+        $line =~ /(\S*)\?(\S*)/ or 
+        ($line !~ /\$/ and $line =~ /\S*\[.+\]\S*/)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+# Given a line, applies glob to every token, handling consecutive 
+# glob patterns if they occur.
+# Eg. processGlobbing((hello *.c *.h)) returns (hello, (glob("*.c"),glob(*.h)))
+sub processGlobbing($) {
+    my $line = $_[0];
+    my @tokens = split(/ /, $line);
+    # List for collecting the globbed tokens:
+    my @globbedTokens = ();
+    # Scan through the list of tokens and glob each consecutive sublist of tokens
+    # if they contain glob patterns
+    for (my $i = 0; $i <= $#tokens; $i++) {
+        my $token = $tokens[$i];
+        my $j = $i;
+        my $hasGlobPattern = 0;
+        # Keep scanning forward through the list until a token with no glob pattern is found 
+        while (requiresGlob($token)) {
+            $hasGlobPattern = 1;
+            last if ($j >= $#tokens);
+            $j++;
+            $token = $tokens[$j];
+        }
+        if ($hasGlobPattern) {
+            # Call globConsecutive to apply glob(...) to the sublist of tokens
+            my $stopIndex = ($j >= $#tokens) ? ($j) : ($j - 1);
+            push(@globbedTokens, globConsecutive(@tokens[$i..$stopIndex]));
+            last if ($j >= $#tokens);
+            $i = $j - 1;            
+        } else {
+            push(@globbedTokens, $token);
+        }
+    }
+    return join(" ", @globbedTokens);
+}
+
+# Given a line and a list of characters, each of those characters will be
+# escaped from the supplied line
+# Eg. escapeCharacters("hello*world?*", ('?', '*')) returns "hello\*world\?\*" 
+sub escapeCharacters($@) {
+    my ($line, @charsToEscape) = @_;
+    foreach my $charToEscape (@charsToEscape) {
+        $line =~ s/\Q$charToEscape/\\$charToEscape/g;
+    }
     return $line;
 }
 
-# Given a list of strings, if the string is non-numeric and not a glob 
-# operation, it is wrapped around single quotes
-sub wrapQuotesForStrings(\@) {
-    my @lines = @{$_[0]};
-    for (my $i = 0; $i <= $#lines; $i++) {
-        $line = $lines[$i];
-        # Checks the line is non-numeric
-        if (!looks_like_number($line)) {
-            # Checks the line doesn't contain glob characters
-            # TODO: Not robust way of checking for globbing. What if filename contains [ and not []?
-            if ($line !~ /[?*\[\]]/ ) {
-                # printE("Wrapping: $line\n");
-                @lines[$i] = "'" . $line . "'";
-            }
+# Given a line, removes all raw backslashes.
+# Eg. wipeBackslashes("1 \* 2") returns "1 * 2"
+sub wipeBackslashes($) {
+    my $line = $_[0];
+    $line =~ s/\\//g;
+    return $line;
+}
+
+# Given a line, checks if it is a variable
+# Eg. isVariable("$myVar") returns 1
+sub isVariable {
+    my $line = $_[0];
+    if ($line =~ /^\$/) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+# Given a line, checks if it is a function call
+# Eg. isFunctionCall("join(...)") returns 1
+sub isFunctionCall($) {
+    my $line = $_[0];
+    if ($line =~ /^\w+\(.*\)/) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+# Given a line, checks if that line should be regarded as a raw string.
+# Useful for determining whether a token should be wrapped in single quotes
+# or not.
+# Eg. isRawString("42") returns 0, isRawString("Andrew") returns 1
+sub isRawString($) {
+    my $line = $_[0];
+    if ($line =~ /^[\$@%`"'\(]/ or 
+        $line =~ /\s[-+*\/%]\s/ or 
+        $line =~ /\s(eq|ne|gt|ge|lt|le)\s/ or 
+        isFunctionCall($line) or
+        looks_like_number($line)) {  # TODO: spaghetti
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+# Given a line, returns the same line wrapped in single quotes
+# Eg. wrapQuotes("hello") returns "'hello'"
+sub wrapQuotes($) {
+    my $line = $_[0];
+    return "'" . $line . "'"
+}
+
+# Given a list, wraps each argument in quotes if they are recognised
+# as raw strings.
+# Eg. wrapQuotesList(("1", "hello", "glob(...)", $myVar)) returns (1, 'hello', glob(...), $myVar)
+sub wrapQuotesList(@) {
+    my @lines = @_;
+    foreach my $line (@lines) {
+        if (isRawString($line)) {
+            $line = wrapQuotes($line);
         }
     }
     return @lines;
 }
 
-# ===== Constructs Processing ===== 
+# Given a line, breaks it up into tokens delimited by space but treating
+# strings wrapped in single quotes or double quotes as a single token.
+# Additionally escapes special symbols in the token if it is wrapped by single quotes.
+# Returns an array of the tokens
+# Eg. tokenise("hello "world" '  $myVar ' 2") returns ("hello", "world", "  \$myVar", )
+sub tokenise {
+    my $line = $_[0];
+    my @tokens = ();
+    return @tokens if ($line eq "");
+    my $arg;
+    my $remainder = "";
+    if ($line =~ /^"/) {
+        # Extracting a token wrapped in double quotes
+        $endQuoteIndex = index($line, '"', 1);
+        $arg = substr($line, 1, $endQuoteIndex - 1);
+        # Get the remaining string of tokens so we can pass it to subsequent recursive calls
+        $remainder = substr($line, $endQuoteIndex + 1, length($line));
+        $remainder =~ s/^\s*//;
+    } elsif ($line =~ /^'/) {
+        # Extracting a token wrapped in single quotes
+        $endQuoteIndex = index($line, "'", 1);
+        $arg = substr($line, 1, $endQuoteIndex - 1);
+        $arg = escapeCharacters($arg, '$', '`');
+        # Get the remaining string of tokens so we can pass it to subsequent recursive calls
+        $remainder = substr($line, $endQuoteIndex + 1, length($line));
+        $remainder =~ s/^\s*//;
+    } else { 
+        # Extracting a normal token (not wrapped by any quotes)
+        $endIndex = index($line, ' ', 0);
+        if ($endIndex == -1) {
+            # This argument is at the end of the supplied line - so extract the whole string
+            $arg = substr($line, 0, length($line));
+        } else {
+            $arg = substr($line, 0, $endIndex);
+        }
+        # Get the remaining string of tokens so we can pass it to subsequent recursive calls
+        $remainder = $line;
+        $remainder =~ s/^\Q$arg//;
+        $remainder =~ s/^\s*//;
+    }
+    push(@tokens, $arg);
+    # Recursively tokenise the remaining string
+    my @remainingTokens = tokenise($remainder);
+    push(@tokens, @remainingTokens);
+    return @tokens;
+}
 
-sub processForLoop(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing For Loop =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
-    # TODO: Repeat the regex match
-    my $subject = $1;
+# Given a shell conditional expression, returns a perl
+# equivalent logical expression 
+sub processCondition($) {
+    my $line = $_[0];
+    if ($line =~ /^test (.*)/) {
+        $line = processTest $1;
+    } elsif ($line =~ /^\[ (.*) \]/) {
+        $line = processTest $1;
+    } else {
+        # This is either a subroutine call or system call
+        $line =~ /^(\w+)/;
+        my $commandName = $1;
+        if (exists $definedSubroutines{$commandName}) {
+            $line = '!' . $line;
+        } else {
+            $line = '!' . processSystemCommand($line);
+        }
+    }
+    return $line;
+}
+
+# Given a string, substitutes instances of $() and `` for
+# backticks. Specially handles expr and test. Returns
+# the string with the command substitution applied
+sub processCommandSubstitution {
+    my $line = $_[0];
+    if ($line =~ /\$\(([^(]*)\)/) {   
+        my $innerCommand = $1;
+        if ($innerCommand =~ /^expr/) {
+            $innerCommand = processExpr($innerCommand);
+            $line =~ s/\$\((.*)\)/$innerCommand/;
+        } else {
+            $line =~ s/\$\((.*)\)/`$innerCommand`/;
+        }
+    } 
+    elsif ($line =~ /`(.*)`/) {
+        my $innerCommand = $1;
+        if ($innerCommand =~ /^expr/) {
+            $innerCommand = processExpr($innerCommand);
+            $line =~ s/`(.*)`/$innerCommand/;
+        }
+    }
+    return $line;
+}
+
+# Given a string, substitutes instances of $(()) for
+# perl arithmetic expressions
+sub processArithmetic {
+    my $line = $_[0];
+    if ($line =~ /\$\(\((.*)\)\)/) {
+        $innerExpr = $1;
+        my @exprArgs = tokenise($innerExpr);
+        foreach my $arg (@exprArgs) {
+            next if (looks_like_number($arg));
+            next if ($arg =~ /[-+*\/%]/);
+            $arg = '$' . $arg;
+        }
+        $convertedExpr = join(" ", @exprArgs);
+        $line =~ s/\$\(\((.*)\)\)/$convertedExpr/;
+    }
+    return $line;
+}
+
+# Given a line, gets the first token 
+sub getCommandName($) {
+    my $line = $_[0];
+    $line =~ /^\w+/;
+    return $1;
+}
+
+# |===================== Constructs Processing =====================|
+
+# Converts shell for loops to perl for loops
+sub processForLoop($) {
+    my $line = $_[0];
+    $line =~ /for (.+) in (.+)/;
+    my $loopVar = $1;
     my $iterable = $2;
-
-    my @loopArgs = split(/ /, $iterable);
-    @loopArgs = wrapQuotesForStrings @loopArgs;
-    $iterable = processGlob($iterable);
+    my @loopArgs = tokenise($iterable);
+    @loopArgs = wrapQuotesList(@loopArgs);
     my $loopArgsJoined = join(", ", @loopArgs);
-
-    my $convertedLine = "for \$$1 ($loopArgsJoined)\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
+    my $convertedLine = "for \$$loopVar ($loopArgsJoined) ";
     return $convertedLine;
 }
 
-sub processDo(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing 'do' =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
-    my $convertedLine = "{\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
+# Processes shell's 'do' keyword
+sub processDo($) {
+    my $line = $_[0];
+    return "{\n";
+}
+
+# Processes shell's 'done' keyword
+sub processDone($) {
+    my $line = $_[0];
+    return "}\n";
+}
+
+# Wraps the given line with system(...)
+sub processSystemCommand($) {
+    my $line = $_[0];
+    my $convertedLine = "system(\"$line\")";
+    return $convertedLine;
+}
+# #####################################
+# Processes variable assignment
+# TODO: myVar="text here" should be $myVar = "text here", not $myVar = '"text here"'
+sub processAssignment($) {
+    my $line = $_[0];
+    my $leftVariable = $1;
+    my $rightValue = $2;
+    if (isRawString($rightValue)) {
+        $rightValue = wrapQuotes $rightValue;
+    }
+    my $convertedLine = "\$$leftVariable = $rightValue;\n";
     return $convertedLine;
 }
 
-sub processDone(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing 'done' =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
-    my $convertedLine = "}\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
-    return $convertedLine;
-}
-
-sub processSystemCommand(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing 'done' =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
-    my $convertedLine = "system(\"$currLine\");\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
-    return $convertedLine;
-}
-
-sub processAssignment(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing assignment =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
-    my $convertedLine = "\$$1 = '$2';\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
-    return $convertedLine;
-}
-
-sub processComment(\@$$) {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing comment =====\n");
-    printD("===> Line number: $i\n");
-    printD("===> Line:        $line\n");
+# Processes shell comments
+sub processComment($) {
+    my $line = $_[0];
     my $convertedLine = "$line\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
     return $convertedLine;
 }
 
-# ===== Built-ins =====
+# Processes shell's function declarations by mapping to subroutine definitions
+sub processFunction {
+    my $line = $_[0];
+    $line =~ /^(\w+)/;
+    my $functionName = $1;
+    my $convertedLine = "sub " . $functionName . " {\n";
+    return $convertedLine;
+}
 
-sub processEcho($) {
+# Processes shell's local variables into perl local variables
+sub processLocal {
+    my $line = $_[0];
+    $line =~ /^local (.*)/;
+    my @localVars = tokenise($1);
+    foreach my $var (@localVars) {
+        $var = '$' . $var;
+    }
+    my $convertedLine = "my (" . join(", ", @localVars) . ");\n";
+    return $convertedLine;
+}
+
+# Processes shell's return statement
+sub processReturn {
+    my $line = $_[0];
+    my $convertedLine = $line . ";\n";
+    return $convertedLine;
+}
+
+
+# Processes shell's if-statements
+sub processIf($) {
+    my $line = $_[0];
+    $line =~ /if (.*)/; 
+    my $condition = $1;
+    $condition = processCondition $condition;
+    my $convertedLine = "if ($condition) ";
+    return $convertedLine;
+}
+
+# Processes shell's 'then' keyword
+sub processThen($) {
+    my $line = $_[0];
+    return "{\n";
+} 
+
+# Processes shell's 'else' keyword
+sub processElse($) {
+    my $line = $_[0];
+    return "else {\n";
+}
+
+# Processes shell's 'elif' keyword
+sub processElif($) {
+    my $line = $_[0];
+    $line =~ /elif (.*)/;   
+    my $condition = $1;
+    $condition = processCondition $condition;
+    my $convertedLine = "elsif ($condition) ";
+}
+
+# Processes shell's 'fi' keyword
+sub processFi {
+    my $line = $_[0];
+    return "}\n";
+}
+
+# Processes shell's while-loop
+sub processWhileLoop {
+    my @lines = @{$_[0]};
+    my $i = $_[1];
+    my $line = $_[2];
+    my $condition = $1;
+    $condition = processCondition $condition;
+    my $convertedLine = "while ($condition) ";
+    return $convertedLine;
+}
+
+# |=============== Built-ins ===============|
+
+# Processes shell's echo command into the equivalent perl print line
+sub processEcho($) { 
     my $line = $_[0];
     $line =~ /echo (.*)/;
-    my $convertedLine = "print \"$1\\n\";\n";
+    my @echoArgs = tokenise($1);
+    my $addTrailingNewline = 1;
+    if ($echoArgs[0] eq "-n") {
+        $addTrailingNewline = 0;
+        shift @echoArgs;
+    }
+    my $joinedArgs = join(" ", @echoArgs);
+    my $convertedLine = "$joinedArgs";
+    $convertedLine .= "\\n" if ($addTrailingNewline);
+    $convertedLine = escapeCharacters($convertedLine, '"');
+    $convertedLine = "print \"$convertedLine\";\n";
     return $convertedLine;
 }
 
+# Processes shell's cd command into the perl equivalent (chdir)
 sub processCd($) {
     my $line = $_[0];
     $line =~ /cd (.*)/;
@@ -184,13 +492,15 @@ sub processCd($) {
     return $convertedLine;
 }
 
+# Processes shell's read command into the perl equivalent (reading from <STDIN>)
 sub processRead($) {
     my $line = $_[0];
     $line =~ /read (.*)/;
-    my $convertedLine = "\$$1 = <STDIN>; chomp \$$1;\n";   # TODO: Should make 'process' subroutines return a list of lines to print, rather than just one scalar
+    my $convertedLine = "\$$1 = <STDIN>; chomp \$$1;\n";   
     return $convertedLine;
 }
 
+# Processes shell's exit command into the perl equivalent (exit)
 sub processExit($) {
     my $line = $_[0];
     $line =~ /exit(.*)/;
@@ -198,185 +508,556 @@ sub processExit($) {
     return $convertedLine;
 }
 
-# ===== Special Variables =====
+# Given a string of the test command's arguments, returns
+# a perl compatible expression.
+sub processTest($) {                          
+    my $line = $_[0];      
+    my @testArgs = tokenise($line);         
+    foreach my $arg (@testArgs) {             
+        if ($arg eq "-a") {         # Logical operators
+            $arg = "&&";
+        } elsif ($arg eq "-o") {
+            $arg = "||";
+        } elsif ($arg eq "=") {     # String and integer comparison
+            $arg = "eq";
+        } elsif ($arg eq "!="){
+            $arg = "-ne";
+        } elsif ($arg eq "-eq"){
+            $arg = "==";
+        } elsif ($arg eq "-ge"){
+            $arg = ">=";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-le"){
+            $arg = "<=";
+        } elsif ($arg eq "-lt"){
+            $arg = "<";
+        } elsif ($arg eq "-ne"){
+            $arg = "!=";
+        } elsif ($arg eq "-n"){   # TODO: test if non-zero works
+            $arg = "eq \"\"";
+        } elsif ($arg eq "-z"){   # TODO: test if zero works
+            $arg = "ne \"\"";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-gt"){
+            $arg = ">";
+        } elsif ($arg eq "-r"){
+            $arg = "-r";
+        } elsif ($arg eq "-d"){
+            $arg = "-d";
+        } else {
+            if (isRawString($arg)) {
+                # Treat this argument as a raw string by wrapping it with single quotes
+                $arg = wrapQuotes $arg;
+            }
+        }
+    }
+    $line = join(" ", @testArgs);
+    my $convertedLine = $line;
+}
 
+# Given a command starting with 'expr', returns the
+# the equivalent perl expression
+sub processExpr($) {
+    my $line = $_[0];      
+    $line =~ /^expr (.*)/;
+    $line = $1;
+    $line = wipeBackslashes $line;
+    my @exprArgs = tokenise($line);
+    foreach my $arg (@exprArgs) {
+        if ($arg =~ /\|/) {
+            $arg = "||";
+        } elsif ($arg =~ /&/) {
+            $arg = "&&";
+        } elsif ($arg =~ /</) {
+            $arg = "lt";
+        } elsif ($arg =~ /<=/) {
+            $arg = "le";
+        } elsif ($arg =~ /=/) {
+            $arg = "eq";
+        } elsif ($arg =~ /!=/) {
+            $arg = "ne";
+        } elsif ($arg =~ />=/) {
+            $arg = "ge";
+        } elsif ($arg =~ />/) {
+            $arg = "gt";
+        } elsif ($arg =~ /\+/) {
+            $arg = "+";
+        } elsif ($arg =~ /-/) {
+            $arg = "-";
+        } elsif ($arg =~ /\*/) {
+            $arg = "*";
+        } elsif ($arg =~ /\//) {
+            $arg = "/";
+        } elsif ($arg =~ /%/) {     
+            $arg = "%";
+        }
+    }
+    $line = join(" ", @exprArgs);
+    my $convertedLine = $line;
+    return $convertedLine;
+}
+
+# |=============== Special Variables ===============|
+
+# Given a line, replaces all instances of shell special variables
+# with the perl equivalent
 sub substituteSpecialVars($) {
     my $line = $_[0];
-    my @variables = $line =~ /(\$\S+)/g;   # TODO: What if the variable isn't delimited normally? Eg. $myVarhello
-    # print("Subbing: $line\n");
+    my @variables = $line =~ /(\$\S+)/g;  
     foreach my $variable (@variables) {
         $variable =~ /\$(\S+)/;
-        my $argNum = $1;
-        if (looks_like_number($argNum)) {
-            $newArgNum = $argNum - 1;   # Shift the arg number down 1 position
-            $line =~ s/\$$argNum/\$ARGV[$newArgNum]/g;
-            # print ("New line: $line\n");
+        my $specialVar = $1;
+        if (looks_like_number($specialVar)) {
+            # Shift the arg number down 1 position
+            $argNum = $specialVar - 1;   
+            if ($isGlobalScope) {
+                $argNum = $specialVar - 1;   
+                $line =~ s/\$$specialVar/\$ARGV[$argNum]/g;
+            } else {
+                $line =~ s/\$$specialVar/\$_[$argNum]/g;
+            }
+        }
+        elsif ($specialVar =~ /#/) {
+            $line =~ s/\$#/\$#ARGV+1/g;  # TODO: Untested
+        }
+        elsif ($specialVar =~ /@/) {
+            $line =~ s/\$@/\@ARGV/g;  # TODO: Untested
+        }
+        elsif ($specialVar =~ /\*/) {
+            $line =~ s/\$\*/join(" ", \@ARGV)/g;  # TODO: Untested
         }
     }
     my $convertedLine = $line;
     return $convertedLine;
 }
 
-# ========================================================================================
-# ===== Currently Working On =====
-
-sub processIf($) {
+# Recursively process and reduce the line by substituting && and || 
+# for the perl equivalent logical operators. This will also process
+# appropriate tokens as they are encountered
+sub processAndOrHelper {
+    no warnings;
     my $line = $_[0];
-    $line =~ /if (.*)/;   # TODO: Can I trust the remainder of the if statement is the condition?
-
-    my $condition = $1;
-    my $convertedLine = "if ($condition)\n";
+    $line =~ /(&&|\|\|)/;
+    my $logicalOperator = "$1";
+    if ($logicalOperator eq "&&") {
+        $logicalOperator = "and";
+    } elsif ($logicalOperator eq "||") {
+        $logicalOperator = "or";
+    }
+    my ($lhs, $remainder) = split(/&&|\|\|/, $line, 2);
+    return $line if ($lhs eq "");
+    if ($remainder) {
+        $remainder =~ s/^\s*//;
+    }
+    $lhs =~ s/\s*$//;
+    my $commandName = getCommandName($lhs);
+    
+    # Checking if this line is running a built-in command and processing
+    # it if it is.
+    if ($lhs =~ /^echo /) {
+        $lhs = processEcho($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^expr /) {
+        my $processedExpr = "print " . processExpr($lhs) . ", \"\\n\";\n";  # TODO: doesn't print 0
+        $lhs = $processedExpr;
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^cd /) {
+        $lhs = processCd($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^read /) {
+        $lhs = processRead($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^exit /) {
+        $lhs = processExit($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^test / or $lhs =~ /^\[/) {
+        $lhs = processCondition($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    elsif ($lhs =~ /^return/) { 
+        $lhs = processReturn($lhs);
+        $lhs =~ s/;\n$//;
+    }
+    # Treating this line as a either a subroutine call or a system command
+    else {
+        $lhs =~ /^(\w+)/;
+        my $commandName = $1;
+        if (exists $definedSubroutines{$commandName}) {
+            $lhs =~ /$commandName (.*)/;
+            my @callArgs = tokenise($1);
+            my $joinedCallArgs = join(", ", @callArgs);
+            $lhs = "! $commandName $joinedCallArgs";
+        } else {
+            $lhs = '!' . (processSystemCommand($lhs));
+        }
+    }
+    
+    my $convertedLine;
+    if ($remainder eq "") {
+        $convertedLine = $lhs;
+    } else {
+        $convertedLine = $lhs . " " . $logicalOperator . " " . processAndOrHelper($remainder);
+    }
     return $convertedLine;
 }
 
-sub processThen {
+# Wrapper function around processAndOrHelper. This checks if the supplied
+# string should be passed through or not
+sub processAndOr {
     my $line = $_[0];
-    return "{\n";
-} 
-
-sub processElse {
-    my $line = $_[0];
-    return "}\nelse {\n";
+    if ($line =~ /&&|\|\|/) {
+        return processAndOrHelper($line);
+    } 
+    return $line;
 }
 
-sub processElif {
+# Processes shell commands involving I/O redirection
+# This can only process output/appending and only for echo... I tried ;(
+sub processIORedirection {
+    my ($line, $perlFile, $tabs) = @_;
+    $line =~ /^(echo .*)(>{2})\s*(\S*)/;
+    my $lhs = $1;
+    my $IOsymbol = $2;
+    my $outputFile = $3;
+    my $openLine = "open F, '$IOsymbol', \"$outputFile\" or die(\"Couldn't open file: \$!\");\n";
+    my $writingLine = ""; 
+    if ($lhs =~ /^echo (.*)/) {
+        $writingLine = processEcho($lhs);
+        $writingLine =~ s/^print /print F /;
+    }
+    my $closeLine = "close F;\n";
+    print $perlFile $tabs;
+    print $perlFile $openLine;
+    print $perlFile $tabs;
+    print $perlFile $writingLine;
+    print $perlFile $tabs;
+    print $perlFile $closeLine;
+}
+
+# Processes shell's chmod into the equivalent perl
+sub processChmod($) {
     my $line = $_[0];
-    $line =~ /elif (.*)/;   # TODO: Can I trust the remainder of the if statement is the condition?
-
-    my $condition = $1;
-    my $convertedLine = "}\nelsif ($condition)\n";
-}
-
-sub processFi {
-    my $line = $_[0];
-    return "}\n";
-}
-
-sub processCondition {
-    
-}
-
-sub processWhileLoop {
-    my @lines = @{$_[0]};
-    my $i = $_[1];
-    my $line = $_[2];
-    printD("===== Processing While Loop =====\n");
-    # TODO: Repeat the regex match
-    my $condition = $1;
-
-    my @loopArgs = split(/ /, $iterable);
-    @loopArgs = wrapQuotesForStrings @loopArgs;
-    $iterable = processGlob($iterable);
-    my $loopArgsJoined = join(", ", @loopArgs);
-
-    my $convertedLine = "for \$$1 ($loopArgsJoined)\n";
-    printE("===> Converted:   $convertedLine\n");
-    printD("===============================\n");
+    $line =~ /^chmod (\S+) (.*)/;
+    my $mode = $1;
+    my @args = tokenise($2);
+    @args = wrapQuotesList(@args);
+    my $argsJoined = join(", ", @args);
+    my $convertedLine = "chmod 0$mode, ($argsJoined);\n";
     return $convertedLine;
-    
 }
 
-# ========================================================================================
-
-# Opening the input shell file for reading and creating the output perl file for writing
-$inputFileName = $ARGV[0];
-open my $inputFile, "<", "$inputFileName" or die("Couldn't open file: $!\n");
-$outputFileName = $inputFileName =~ s/\.[^.]+$//;
-$outputFileName .= ".pl";
-open my $perlFile, ">", "$inputFileName.pl" or die("Couldn't create file: $!\n");
-
-if (!$debugging) {
-    $perlFile = STDOUT;
+# Processes shell's rm into the equivalent perl (unlink)
+sub processRm($) {
+    my $line = $_[0];
+    $line =~ /^rm (.*)/;
+    my @args = tokenise($1);
+    @args = wrapQuotesList(@args);
+    my $argsJoined = join(", ", @args);
+    my $convertedLine = "unlink ($argsJoined);\n";
+    return $convertedLine;
 }
+
+sub processLine($\@$$);
+sub processSwitchCase($$\@$$);
+
+# Given any line of valid shell code, attempts to translate it into
+# the equivalent line of perl.
+# Returns the number of ADDITIONAL lines of shell that were processed.
+# If one line of shell was processed, then it simply returns 0. 
+sub processLine($\@$$) {
+    no warnings;                 
+    my $perlFile = $_[0];
+    my @lines = @{$_[1]};
+    # Tracks the index of the current line
+    my $i = $_[2];
+    # IndentationShift specifies how many levels of indentation to add (can be negative)
+    my $indentationShift = $_[3];   
+    my $currLine = $lines[$i];
+    chomp $currLine;
+    $indentLevel = getIndentLevel($currLine);
+    $currLine = stripIndent($currLine);
+    # Skip processing the hashbang line
+    return 0 if ($currLine =~ /^#!/);    
+    my $tabs = ' ' x ($indentLevel + 4 * $indentationShift); 
+
+    my $linesToSkip = 0;
+
+    # Initial processing
+    $currLine = substituteSpecialVars($currLine);  
+    $currLine = processArithmetic($currLine);
+    $currLine = processCommandSubstitution($currLine);
+    if ($currLine =~ /^(echo .*)(>{1,2})\s*(\S*)/) {
+        $currLine = processIORedirection($currLine, $perlFile, $tabs);
+        return 0;
+    }
+    # Inline comment
+    if ($currLine =~ /(.*)[^\$](#.*)/) { 
+        print $perlFile $tabs;
+        # Matched a shell comment
+        print $perlFile processComment($2);
+        $currLine = $1;
+        $currLine =~ s/\s*$//;
+    }
+
+    # For loops and while loops:
+    if ($currLine =~ /^for (.+) in (.+)/) {
+        $currLine = processGlobbing($currLine); 
+        print $perlFile $tabs;
+        print $perlFile processForLoop($currLine);
+    }
+    elsif ($currLine =~ /^while (.+)/) {
+        $currLine = processGlobbing($currLine); 
+        print $perlFile $tabs;
+        print $perlFile processWhileLoop($currLine);
+    }
+    elsif ($currLine =~ /^done\s*/) {  # TODO: \s* isn't necessary since tabs are stripped first
+        print $perlFile $tabs;
+        print $perlFile processDone($currLine);
+    }
+    elsif ($currLine =~ /^do\s*/) {
+        print $perlFile processDo($currLine);
+    }
+    # Functions
+    elsif (isFunctionCall($currLine)) {
+        $isGlobalScope = 0;
+        $currLine =~ /^(\w+)/;
+        my $subroutineName = $1; 
+        print $perlFile $tabs;
+        print $perlFile processFunction($currLine);
+        $definedSubroutines{$subroutineName} = 1;
+    }
+    elsif ($currLine =~ /^local (.*)/) {  
+        print $perlFile $tabs;
+        print $perlFile processLocal($currLine);
+    }
+    elsif ($currLine =~ /^}/) {  
+        # Closing curly bracket
+        $isGlobalScope = 1;
+        print $perlFile $tabs;
+        print $perlFile "}\n";
+    }
+    elsif ($currLine =~ /^return/) {  
+        print $perlFile $tabs;
+        print $perlFile processReturn($currLine);
+    }
+    # If statements:
+    elsif ($currLine =~ /^\s*elif /) {
+        $currLine = processGlobbing($currLine); 
+        print $perlFile $tabs;
+        print $perlFile processFi($currLine);
+        print $perlFile $tabs;
+        print $perlFile processElif($currLine);
+    }
+    elsif ($currLine =~ /^\s*if /) {
+        $currLine = processGlobbing($currLine); 
+        print $perlFile $tabs;
+        print $perlFile processIf($currLine);
+    }
+    elsif ($currLine =~ /^\s*then\s*$/) {
+        print $perlFile processThen($currLine);
+    }
+    elsif ($currLine =~ /^\s*else\s*$/) {
+        print $perlFile $tabs;
+        print $perlFile processFi($currLine);
+        print $perlFile $tabs;
+        print $perlFile processElse($currLine);
+    }
+    elsif ($currLine =~ /^\s*fi\s*$/) {
+        print $perlFile $tabs;
+        print $perlFile processFi($currLine);
+    }
+    # Comments:
+    elsif ($currLine =~ /^#[^!](.*)/) { 
+        print $perlFile $tabs;
+        print $perlFile processComment($currLine);
+    }
+    else {
+        # Reached a line of shell code which is not a standard construct
+        # Checking if this line is an assignment operation
+        if ($currLine =~ /^(\S+)=(.*)/) {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            print $perlFile processAssignment($currLine);
+        }
+        # Checking if this is an empty line
+        elsif ($currLine !~ /\S+/) {
+            print $perlFile $tabs;
+            print $perlFile "\n";
+            return 0;
+        }
+        # Checking if this line is running a built-in command
+        elsif ($currLine =~ /^echo /) {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            print $perlFile processEcho($currLine);
+        }
+        elsif ($currLine =~ /^expr /) {
+            print $perlFile $tabs;
+            my $processedExpr = "print " . processExpr($currLine) . ", \"\\n\";\n";
+            print $perlFile $processedExpr;
+        }
+        elsif ($currLine =~ /^cd /) {
+            print $perlFile $tabs;
+            print $perlFile processCd($currLine);
+        }
+        elsif ($currLine =~ /^read /) {
+            print $perlFile $tabs;
+            print $perlFile processRead($currLine);
+        }
+        elsif ($currLine =~ /^exit /) {
+            print $perlFile $tabs;
+            print $perlFile processExit($currLine);
+        }
+        elsif ($currLine =~ /^test / or $currLine =~ /^\[ (.*) \]/) {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            if ($currLine =~ /&&|\|\|/) { 
+                $currLine = processAndOr($currLine);
+                print $perlFile ("$currLine;\n");
+            } else {
+                processCondition($currLine);
+            }
+        }
+        elsif ($currLine =~ /^chmod /) {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            print $perlFile processChmod($currLine);
+        }
+        elsif ($currLine =~ /^rm /) {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            print $perlFile processRm($currLine);
+        }
+        # Switch-case
+        elsif ($currLine =~ /^case (.*) in/) {
+            my $caseVar = $1;
+            # Start processing the switch case on the next line (ie. the first case)
+            $linesToSkip += processSwitchCase($perlFile, $caseVar, @lines, $i + 1, $indentationShift - 1);
+        }   
+        elsif ($currLine =~ /^esac/) {  # TODO: shouldnt have this
+            return 0;
+        }
+        # Treating this line as a either a subroutine call or a system command
+        else {
+            $currLine = processGlobbing($currLine); 
+            print $perlFile $tabs;
+            $currLine =~ /^(\w+)/;
+            my $commandName = $1;
+            if (exists $definedSubroutines{$commandName}) {
+                if ($currLine =~ /&&|\|\|/) { 
+                    $currLine = processAndOr($currLine);
+                }
+                $currLine =~ /$commandName (.*)/;
+                my @callArgs = tokenise($1);
+                my $joinedCallArgs = join(", ", @callArgs);
+                print $perlFile "$commandName ($joinedCallArgs);\n";
+            } else {
+                if ($currLine =~ /&&|\|\|/) {
+                    $currLine = processAndOrHelper($currLine);
+                    print $perlFile ($currLine . ";\n");
+                } else {
+                    print $perlFile (processSystemCommand($currLine) . ";\n");
+                }
+            }
+        }
+    }
+    return $linesToSkip;
+}
+
+# Processes shell's switch-case statements.
+# Nested switch-case statements are handled by mutual recursion with 
+# the processLine subroutine
+# Returns the number of lines processed
+sub processSwitchCase($$\@$$) {
+    no warnings;
+    my $perlFile = $_[0];
+    my $caseVar = $_[1];
+    my @lines = @{$_[2]};
+    my $lineIndex = $_[3];
+    my $indentationShift = $_[4];   
+
+    my $isFirstCase = 1;
+    my $currLine = $lines[$lineIndex];
+
+    my $linesProcessed = 0;
+    while ($currLine !~ /esac/) {
+        $currLine =~ /(\S+)\)/;
+        my $indentLevel = getIndentLevel($currLine);
+        $currLine = stripIndent($currLine);
+        my $case = $1;
+        if (isRawString($case)) {
+            $case = wrapQuotes $case;
+        } 
+        my $tabs = ' ' x ($indentLevel + 4 * $indentationShift);
+        $linesProcessed++;
+        if ($isFirstCase) {
+            print $perlFile $tabs;  
+            print $perlFile ("if ($caseVar eq $case) {\n"); 
+            $isFirstCase = 0;
+        } else {
+            if ($currLine =~ /[;]{2}/) {
+                $tabs = ' ' x ($indentLevel + 4 * ($indentationShift - 1));
+                print $perlFile $tabs;
+                print $perlFile ("}\n");
+            }
+            elsif ($currLine =~ /^\*\)/) {
+                print $perlFile $tabs;
+                print $perlFile ("else {\n");
+            }
+            elsif ($currLine =~ /(\S+)\)/) {
+                print $perlFile $tabs;
+                print $perlFile ("elsif ($caseVar eq $case) {\n");
+            }
+            else {
+                # Regular command here
+                $linesProcessed += processLine($perlFile, @lines, $lineIndex + $linesProcessed - 1, $indentationShift);
+            }
+        }
+        $currLine = $lines[$lineIndex + $linesProcessed];
+    }
+    return $linesProcessed + 1;
+}
+
+# |=============== Main ===============|
+
+$perlFile = STDOUT;
 
 # Writing the hashbang line
 $perlPath = `which perl`;
 chomp $perlPath;
-print $perlFile "#!$perlPath -w\n";
+print $perlFile "#!$perlPath\n";
 
-@inputLines = <$inputFile>;
+# Reading all lines of input and then substituting all semicolons for
+# newlines, EXCEPT when the semicolon occurs in pairs like ';;'
+@inputLines = <>;
+$inputs = join("", @inputLines);     
+# Using negative lookahead and negative lookbehind to avoid replacing double semicolons ;;
+$inputs =~ s/(?<!;);(?!;)\s*/\n/g;     
+@inputLines = split(/\n/, $inputs);
 
+# Globals
+$isGlobalScope = 1;
+my %definedSubroutine;
+
+# Loops through and processes every line of shell. The processLine subroutine
+# returns how many line positions to jump forward by (normally it will be 0)
 for ($i = 0; $i <= $#inputLines; $i++) {
-    $currLine = $inputLines[$i];
-    chomp $currLine;
-    $indentLevel = getIndentLevel($currLine);
-    $currLine = stripIndent($currLine);
-    printC("===> $currLine (indentation: $indentLevel)\n");
-    next if ($currLine =~ /^#!/);    # Skip the hashbang line
-
-    my $tabs = ' ' x $indentLevel;
-    print $perlFile $tabs;
-
-    # Search and replace shell's special variables, where they occur
-    $currLine = substituteSpecialVars($currLine);
-
-    # TODO: match patterns aren't so robust
-    # For loops and while loops:
-    if ($currLine =~ /for (.+) in (.+)/) {
-        print $perlFile processForLoop(@inputLines, $i, $currLine);
-    }
-    elsif ($currLine =~ /while (.+)/) {
-        print $perlFile processWhileLoop(@inputLines, $i, $currLine);
-    }
-    elsif ($currLine =~ /\s*done\s*/) {  # TODO: \s* isn't necessary since tabs are stripped first
-        print $perlFile processDone(@inputLines, $i, $currLine);
-    }
-    elsif ($currLine =~ /\s*do\s*/) {
-        print $perlFile processDo(@inputLines, $i, $currLine);
-    }
-    # If statements:
-    elsif ($currLine =~ /\s*elif /) {
-        print $perlFile processElif($currLine);
-    }
-    elsif ($currLine =~ /\s*if /) {
-        print $perlFile processIf($currLine);
-    }
-    elsif ($currLine =~ /\s*then/) {
-        print $perlFile processThen($currLine);
-    }
-    elsif ($currLine =~ /\s*else/) {
-        print $perlFile processElse($currLine);
-    }
-    elsif ($currLine =~ /\s*fi/) {
-        print $perlFile processFi($currLine);
-    }
-    # Comments:
-    elsif ($currLine =~ /^#[^!](.*)/) {
-        # Matched a shell comment
-        print $perlFile processComment(@inputLines, $i, $currLine);
-    }
-    else {
-        # Reached a line of 'general' shell code
-
-        # Checking if this line is an assignment operation
-        if ($currLine =~ /^(.+)=(.*)/) {
-            print $perlFile processAssignment(@inputLines, $i, $currLine);
-        }
-
-        # Checking if this is an empty line
-        elsif (!$currLine =~ /\S+/) {
-            print $perlFile "\n";
-        }
-
-        # Checking if this line is running a built-in command
-        elsif ($currLine =~ /^echo /) {
-            print $perlFile processEcho($currLine);
-        }
-        elsif ($currLine =~ /^cd /) {
-            print $perlFile processCd($currLine);
-        }
-        elsif ($currLine =~ /^read /) {
-            print $perlFile processRead($currLine);
-        }
-        elsif ($currLine =~ /^exit /) {
-            print $perlFile processExit($currLine);
-        }
-
-        # Treating this line as a system command
-        else {
-            print $perlFile processSystemCommand(@inputLines, $i, $currLine);
-        }
-    }
+    $i += processLine($perlFile, @inputLines, $i, 0);
 }
 
 # Closing the output file
