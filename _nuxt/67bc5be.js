@@ -1,0 +1,1 @@
+(window.webpackJsonp=window.webpackJsonp||[]).push([[3],{286:function(e,n,t){"use strict";t.r(n);var l=t(1).a.extend({name:"IndexPage"}),o=t(62),component=Object(o.a)(l,(function(){var e=this,n=e._self._c;e._self._setupProxy;return n("div",[e._v("Nuxt.js App!")])}),[],!1,null,null,null);n.default=component.exports}}]);
