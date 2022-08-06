@@ -7,7 +7,7 @@ serves as a wrapper around the shell static analyser, [ShellCheck](https://githu
 transpiler binary.
 
 **Setup & Usage**
-From `transpiler-service`, run the following:
+From `transperler-service`, run the following:
 ```bash
 go get .    # Fetch all third-party dependencies.
 go run .    # Start the development server.
@@ -23,7 +23,7 @@ The service exposes only two endpoints:
         - Assumes that the source code is valid, ie. that the source code has been validated through `POST /api/shellanalysis`.
     - Output: `{ pl_output: "..." }`.
 
-2. `POST /api/shellanalysis`
+2. `POST /api/shell-analysis`
     - Input: `sh_source_code`.
         - `sh_source_code` must be fewer than 1000 lines or 50000 characters.
     - Output: `{ status: "error" | "warning" | "success", message: "..." }`.
