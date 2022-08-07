@@ -1,0 +1,9 @@
+version: "3.8"
+services:
+  api:
+    build:
+      context: ./transperler-service
+      dockerfile: Dockerfile
+    image: transpiler-service:latest
+    ports:
+      - 3456:3456
