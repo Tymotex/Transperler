@@ -1,6 +1,37 @@
-# Could run the following to get a pre-compiled binary, then serve that binary
-# as a service.
-# scversion="stable" # or "v0.4.7", or "latest"
-# wget -qO- "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
-# cp "shellcheck-${scversion}/shellcheck" /usr/bin/
-# shellcheck --version
+############################
+# STEP 1 build executable binary
+############################
+FROM golang:alpine AS builder
+
+# Install git, which is required for fetching the dependencies.
+RUN apk update && apk add --no-cache 'git=~2'
+
+# Install dependencies.
+ENV GO111MODULE=on
+WORKDIR $GOPATH/src/packages/transperler/
+COPY . .
+
+# Fetch dependencies using go get.
+RUN go get -d -v
+
+# Build the binary.
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/main .
+
+############################
+# STEP 2 build a small image
+############################
+FROM alpine:3
+
+WORKDIR /
+
+# Copy our static executable.
+COPY --from=builder /go/main /go/main
+
+ENV PORT 8080
+ENV GIN_MODE release
+EXPOSE 8080
+
+WORKDIR /go
+
+# Run the Go Gin binary.
+ENTRYPOINT ["/go/main"]

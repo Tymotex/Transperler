@@ -2,8 +2,8 @@ package main
 
 import (
 	"net/http"
-	"transperler-service/transpiler"
 	"transperler-service/shellAnalyser"
+	"transperler-service/transpiler"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,5 +26,10 @@ func setupRouter() *gin.Engine {
 
 func main() {
 	router := setupRouter()	
-	router.Run("localhost:8080")
+	
+	// This used to be `router.Run("localhost:8080")` but this would make the
+	// container unresponsive to queries. Changing it to `0.0.0.0:8080` solves
+	// this issue.
+	// Source: https://stackoverflow.com/questions/72783444/docker-go-server-does-not-respond
+	router.Run("0.0.0.0:8080")
 }
