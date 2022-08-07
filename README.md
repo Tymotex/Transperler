@@ -26,7 +26,7 @@ The service exposes only two endpoints:
 2. `POST /api/shell-analysis`
     - Input: `sh_source_code`.
         - `sh_source_code` must be fewer than 1000 lines or 50000 characters.
-    - Output: `{ status: "error" | "warning" | "success", message: "..." }`.
+    - Output: `{ status: "error" | "success", message: "..." }`.
 
 ## Transperler Client
 The Transperler Client is a web frontend developed with Vue, Nuxt.js and

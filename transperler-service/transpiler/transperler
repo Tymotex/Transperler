@@ -363,7 +363,6 @@ sub processSystemCommand($) {
 }
 # #####################################
 # Processes variable assignment
-# TODO: myVar="text here" should be $myVar = "text here", not $myVar = '"text here"'
 sub processAssignment($) {
     my $line = $_[0];
     my $leftVariable = $1;
@@ -664,7 +663,7 @@ sub processAndOrHelper {
         $lhs =~ s/;\n$//;
     }
     elsif ($lhs =~ /^expr /) {
-        my $processedExpr = "print " . processExpr($lhs) . ", \"\\n\";\n";  # TODO: doesn't print 0
+        my $processedExpr = "print " . processExpr($lhs) . ", \"\\n\";\n";  
         $lhs = $processedExpr;
         $lhs =~ s/;\n$//;
     }
@@ -820,7 +819,7 @@ sub processLine($\@$$) {
         print $perlFile $tabs;
         print $perlFile processWhileLoop($currLine);
     }
-    elsif ($currLine =~ /^done\s*/) {  # TODO: \s* isn't necessary since tabs are stripped first
+    elsif ($currLine =~ /^done\s*/) {  
         print $perlFile $tabs;
         print $perlFile processDone($currLine);
     }
@@ -944,7 +943,7 @@ sub processLine($\@$$) {
             # Start processing the switch case on the next line (ie. the first case)
             $linesToSkip += processSwitchCase($perlFile, $caseVar, @lines, $i + 1, $indentationShift - 1);
         }   
-        elsif ($currLine =~ /^esac/) {  # TODO: shouldnt have this
+        elsif ($currLine =~ /^esac/) { 
             return 0;
         }
         # Treating this line as a either a subroutine call or a system command
@@ -1028,7 +1027,7 @@ sub processSwitchCase($$\@$$) {
     return $linesProcessed + 1;
 }
 
-# |=============== Main ===============|
+# |============================================================================|
 
 $perlFile = STDOUT;
 
@@ -1041,16 +1040,18 @@ print $perlFile "#!$perlPath\n";
 # newlines, EXCEPT when the semicolon occurs in pairs like ';;'
 @inputLines = <>;
 $inputs = join("", @inputLines);     
-# Using negative lookahead and negative lookbehind to avoid replacing double semicolons ;;
+
+# Using negative lookahead and negative lookbehind to avoid replacing double
+# semicolons ;;.
 $inputs =~ s/(?<!;);(?!;)\s*/\n/g;     
 @inputLines = split(/\n/, $inputs);
 
-# Globals
+# Globals.
 $isGlobalScope = 1;
 my %definedSubroutine;
 
 # Loops through and processes every line of shell. The processLine subroutine
-# returns how many line positions to jump forward by (normally it will be 0)
+# returns how many line positions to jump forward by (normally it will be 0).
 for ($i = 0; $i <= $#inputLines; $i++) {
     $i += processLine($perlFile, @inputLines, $i, 0);
 }
