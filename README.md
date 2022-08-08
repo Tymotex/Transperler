@@ -29,7 +29,7 @@ To run HTTP tests, simply run `go test`.
 
 **Endpoints**
 The service exposes only two endpoints:
-1. `POST /api/transpile`
+1. `POST /api/transpiler`
     - Input: `sh_source_code`.
         - `sh_source_code` must be fewer than 1000 lines or 50000 characters.
         - Assumes that the source code is valid, ie. that the source code has been validated through `POST /api/shellanalysis`.

@@ -64,6 +64,7 @@ func ExtractShellSourceToTempFile(context *gin.Context) *os.File {
 }
 
 func Post(context *gin.Context) {
+
 	tmpFile := ExtractShellSourceToTempFile(context)
 	defer os.Remove(tmpFile.Name())
 	if tmpFile == nil {
