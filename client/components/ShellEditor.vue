@@ -17,6 +17,7 @@ import { highlight, languages } from 'prismjs';
 import 'vue-prism-editor/dist/prismeditor.min.css';
 import 'prismjs/components/prism-bash';
 import { defineComponent } from 'vue';
+import { BASE_URL } from '~/constants/api-routes';
 
 export default defineComponent({
 	components: {
@@ -53,9 +54,14 @@ export default defineComponent({
 			}, 1000);
 		},
 		async shellAnalysis() {
-			const res = await axios.post('http://localhost:8080/shell-analysis', {
-				shSourceCode: this.code,
-			});
+			let res: any;
+			try {
+				res = await axios.post(`${BASE_URL}/shell-analysis`, {
+					shSourceCode: this.code,
+				});
+			} catch (err) {
+				this.$emit('shellError', "The server isn't responding, sorry :(");
+			}
 			if (res.data.status !== 'success') {
 				this.$emit('shellError', res.data.message);
 				throw Error('Shell static analyser reported invalid code.');
@@ -65,7 +71,7 @@ export default defineComponent({
 		},
 		async transpile() {
 			try {
-				const res = await axios.post('http://localhost:8080/transpiler', {
+				const res = await axios.post(`${BASE_URL}/transpiler`, {
 					shSourceCode: this.code,
 				});
 				this.$emit('transpiled', this.code, res.data.plOutput);

@@ -12,7 +12,10 @@
 			line-numbers
 			readonly
 		></prism-editor>
-		<div v-if="error" class="absolute p-4 w-full top-1/2 transform -translate-y-1/2">
+		<div
+			v-if="error"
+			class="error-popup absolute p-4 w-full top-1/2 transform -translate-y-1/2"
+		>
 			<div class="bg-red-500 bg-opacity-50 rounded-md p-4 max-h-56 overflow-auto">
 				<p class="mb-2">❌ Shell Script Issue.</p>
 				<pre class="p-4 text-sm text-gray-400 overflow-auto">{{ error }}</pre>
@@ -78,6 +81,9 @@ export default defineComponent({
 	padding: 5px;
 	height: 500px !important;
 	max-height: 500px !important;
+}
+.error-popup {
+	animation: fadeInNoShift 0.5s ease-out 0s;
 }
 </style>
 

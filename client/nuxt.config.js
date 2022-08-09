@@ -16,6 +16,13 @@ export default {
         ]
     },
 
+    env: {
+        // PROD_API_URL: 'https://api.transperler.timz.dev',
+        // DEV_API_URL: 'http://localhost:8080'
+        DEV_API_URL: 'https://api.transperler.timz.dev',
+        PROD_API_URL: 'http://localhost:8080'
+    },
+
     // Global CSS: https://go.nuxtjs.dev/config-css
     css: [
     ],

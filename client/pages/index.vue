@@ -75,6 +75,15 @@ export default Vue.extend({
 		transform: translateY(0px);
 	}
 }
+
+@keyframes fadeInNoShift {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 100%;
+	}
+}
 </style>
 <style scoped>
 .background {
