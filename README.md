@@ -53,11 +53,8 @@ yarn dev
 
 ## Deployment
 
-The Transperler Client's deployment to GitHub Pages is handled automatically
-on pushes/merges to `master` by a GitHub Actions workflow.
-
-The Transperler Service is dockerised and can be deployed on AWS ECS or Google
+The Transperler Client is deployed on Vercel. The Transperler Service is dockerised and can be deployed on AWS ECS or Google
 Cloud Run, for example. In my case, I've deployed the service on a Linux VM 
 from [Vultr](https://www.vultr.com/) and have set up NGINX as a reverse proxy to
 direct requests to the Docker container for the service. Currently, deployment
-just involves running `docker-compose up -d`.
+just involves running `docker-compose up -d` or `nohup go run .`.
