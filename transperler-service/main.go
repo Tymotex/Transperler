@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 	"transperler-service/shellAnalyser"
 	"transperler-service/transpiler"
 
@@ -34,15 +33,15 @@ func CORSMiddleware() gin.HandlerFunc {
 // Initialise the Gin router and attach all endpoints.
 func setupRouter() *gin.Engine {
 	router := gin.Default()
-
-	router.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"http://localhost:3000"},
-        AllowMethods:     []string{"POST", "GET"},
-        AllowHeaders:     []string{"Origin"},
-        ExposeHeaders:    []string{"Content-Length"},
-        AllowCredentials: true,
-        MaxAge: 12 * time.Hour,
-    }))
+	router.Use(cors.Default())
+	// router.Use(cors.New(cors.Config{
+    //     AllowOrigins:     []string{"http://localhost:3000"},
+    //     AllowMethods:     []string{"POST", "GET"},
+    //     AllowHeaders:     []string{"Origin"},
+    //     ExposeHeaders:    []string{"Content-Length"},
+    //     AllowCredentials: true,
+    //     MaxAge: 12 * time.Hour,
+    // }))
 	
 	// Health check endpoint.
 	router.GET("/", func(context *gin.Context) {

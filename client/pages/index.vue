@@ -5,8 +5,12 @@
 			<div>
 				<Header />
 				<div class="flex flex-wrap justify-center flex-row gap-x-2 gap-y-2">
-					<ShellEditor @transpiled="handleTranspiled" :initShSourceCode="shSourceCode" />
-					<PerlOutput :plOutput="plOutput" />
+					<ShellEditor
+						@transpiled="handleTranspiled"
+						:initShSourceCode="shSourceCode"
+						@shellError="handleShellErrors"
+					/>
+					<PerlOutput :plOutput="plOutput" :errMessage="errMessage" />
 				</div>
 			</div>
 			<Footer />
@@ -23,12 +27,15 @@ export default Vue.extend({
 		return {
 			shSourceCode: '#!/bin/sh\n\necho "Hello world"\n',
 			plOutput: '#!/usr/bin/perl\n\nprint "Hello world\\n"\n',
+			errMessage: '',
 		};
 	},
 	methods: {
 		handleTranspiled(shSourceCode: string, plOutput: string) {
 			this.plOutput = plOutput;
-			console.log('SETTING:', plOutput);
+		},
+		handleShellErrors(errMessage: string) {
+			this.errMessage = errMessage;
 		},
 	},
 });

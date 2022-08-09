@@ -7,9 +7,6 @@
 			line-numbers
 			@input="handleTyping"
 		></prism-editor>
-		<div class="absolute bottom-0 p-4 w-full">
-			<div class="bg-gray-600 bg-opacity-50 rounded-md p-4">Fuck</div>
-		</div>
 	</div>
 </template>
 
@@ -19,7 +16,6 @@ import axios from 'axios';
 import { highlight, languages } from 'prismjs';
 import 'vue-prism-editor/dist/prismeditor.min.css';
 import 'prismjs/components/prism-bash';
-import 'prismjs/themes/prism-twilight.css';
 import { defineComponent } from 'vue';
 
 export default defineComponent({
@@ -30,7 +26,10 @@ export default defineComponent({
 		initShSourceCode: String,
 	},
 	data() {
-		return { code: this.initShSourceCode };
+		return { code: this.initShSourceCode, typingTimer: undefined } as {
+			code: string;
+			typingTimer: any;
+		};
 	},
 	methods: {
 		highlighter(code: string) {
@@ -38,7 +37,31 @@ export default defineComponent({
 		},
 		handleTyping(code: string) {
 			this.code = code;
-			this.transpile();
+
+			// Attempt transpilation 1 second after the user has finished
+			// typing.
+			// Source: https://stackoverflow.com/questions/59711470/how-to-do-submit-form-after-user-stop-typing-in-vuejs2.
+			clearTimeout(this.typingTimer);
+			this.typingTimer = setTimeout(() => {
+				this.shellAnalysis()
+					.then(() => {
+						// If the shell source code is valid, then proceed with
+						// transpilation.
+						this.transpile();
+					})
+					.catch((_) => {});
+			}, 1000);
+		},
+		async shellAnalysis() {
+			const res = await axios.post('http://localhost:8080/shell-analysis', {
+				shSourceCode: this.code,
+			});
+			if (res.data.status !== 'success') {
+				this.$emit('shellError', res.data.message);
+				throw Error('Shell static analyser reported invalid code.');
+			} else {
+				this.$emit('shellError', '');
+			}
 		},
 		async transpile() {
 			try {
@@ -51,7 +74,7 @@ export default defineComponent({
 			}
 		},
 	},
-	emits: ['transpiled'],
+	emits: ['transpiled', 'shellError'],
 	mounted() {
 		// Forcefully remove accessibility outline on code editor.
 		document.querySelectorAll('textarea').forEach((e) => (e.style.outline = 'none'));
@@ -65,8 +88,9 @@ export default defineComponent({
 }
 
 .code-editor {
-	background: #2d2d2d;
 	color: #ccc;
+	background: #262030;
+	box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
 
 	font-family: Fira code, Fira Mono, Consolas, Menlo, Courier, monospace;
 	font-size: 14px;
