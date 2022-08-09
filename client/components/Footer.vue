@@ -1,7 +1,6 @@
 <template>
 	<footer class="max-w-md mx-auto text-center mt-5">
 		<p>
-			<FontAwesomeIcon></FontAwesomeIcon>
 			Built with <strong>Vue.js</strong> and <strong>Nuxt.js</strong>. See the
 			<a href="https://github.com/Tymotex/Transperler" class="text-blue-200 underline"
 				>repository here</a
