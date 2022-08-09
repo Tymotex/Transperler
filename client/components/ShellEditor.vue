@@ -102,7 +102,7 @@ export default defineComponent({
 	font-size: 14px;
 	line-height: 1.5;
 	padding: 5px;
-	height: 500px !important;
-	max-height: 500px !important;
+	height: 720px !important;
+	max-height: 720px !important;
 }
 </style>
