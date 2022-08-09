@@ -9,8 +9,7 @@
 		<span aria-hidden="true" class="block text-center text-xl mb-3"> 🦪 → ⚪ </span>
 	</header>
 </template>
-<style scope>
+<style scoped>
 header {
-	animation: fadeIn 0.5s ease-out 0s;
 }
 </style>

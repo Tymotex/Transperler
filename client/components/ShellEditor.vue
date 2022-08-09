@@ -91,7 +91,6 @@ export default defineComponent({
 <style scoped>
 .code-container {
 	width: 500px;
-	animation: fadeIn 1s ease-out 0s;
 }
 
 .code-editor {

@@ -67,7 +67,6 @@ export default defineComponent({
 <style scoped lang="scss">
 .code-container {
 	width: 500px;
-	animation: fadeIn 2s ease-out 0s;
 }
 
 .code-editor {
@@ -83,7 +82,6 @@ export default defineComponent({
 	max-height: 500px !important;
 }
 .error-popup {
-	animation: fadeInNoShift 0.5s ease-out 0s;
 }
 </style>
 
