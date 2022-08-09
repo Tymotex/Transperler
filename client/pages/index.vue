@@ -64,6 +64,17 @@ export default Vue.extend({
 	border-radius: 10px;
 	border: 3px none #ffffff;
 }
+
+@keyframes fadeIn {
+	0% {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	100% {
+		opacity: 100%;
+		transform: translateY(0px);
+	}
+}
 </style>
 <style scoped>
 .background {

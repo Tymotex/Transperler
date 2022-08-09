@@ -64,6 +64,7 @@ export default defineComponent({
 <style scoped lang="scss">
 .code-container {
 	width: 500px;
+	animation: fadeIn 2s ease-out 0s;
 }
 
 .code-editor {
