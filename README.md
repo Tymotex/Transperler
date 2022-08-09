@@ -7,7 +7,7 @@ to preserve comments and indentation in the Shell source code.
 To start the Transperler API locally, execute the following from the project root.
 ```bash
 docker-compose build
-docker-compose up -d    # The API will be listening on port 3456 by default.
+docker-compose up -d    # The API will be listening on port 6666 by default.
 
 # To tear down the service, run:
 docker-compose down   
@@ -22,7 +22,7 @@ transpiler binary.
 From `transperler-service`, run the following:
 ```bash
 go get .    # Fetch all third-party dependencies.
-go run .    # Start the development server at port 3456.
+go run .    # Start the development server at port 6666.
 ```
 
 To run HTTP tests, simply run `go test`.
