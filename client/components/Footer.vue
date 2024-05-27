@@ -6,6 +6,6 @@
 				>repository here</a
 			>.
 		</p>
-		<p class="font-light text-gray-600 text-sm my-2">&copy; Tim Zhang 2022</p>
+		<p class="font-light text-gray-600 text-sm my-2">&copy; Tim Zhang 2024</p>
 	</footer>
 </template>
