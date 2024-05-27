@@ -5,13 +5,17 @@
 				'code-editor': true,
 				'rounded-md': true,
 				'overflow-auto': true,
-				blurred: error,
+				blurred: error || isTranspiling || isPendingTranspiling,
 			}"
 			v-model="code"
 			:highlight="highlighter"
 			line-numbers
 			readonly
 		></prism-editor>
+		<div class="loading-spinner">
+			<p v-if="isPendingTranspiling">Waiting...</p>
+			<p v-if="isTranspiling">Transpiling...</p>
+		</div>
 		<div
 			v-if="error"
 			class="error-popup absolute p-4 w-full top-1/2 transform -translate-y-1/2"
@@ -41,11 +45,14 @@ export default defineComponent({
 	props: {
 		plOutput: String,
 		errMessage: String,
+		isPendingTranspiling: Boolean,
+		isTranspiling: Boolean,
 	},
 	data() {
 		return {
 			code: this.plOutput,
 			error: this.errMessage,
+			isTranspiling: this.isTranspiling,
 		};
 	},
 	methods: {
@@ -88,11 +95,18 @@ export default defineComponent({
 		line-height: normal;
 	}
 }
+.loading-spinner {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+}
 </style>
 
 <style>
 .blurred pre {
 	opacity: 0.2 !important;
 	text-shadow: 0 0 5px rgba(255, 255, 255, 0.5) !important;
+	transition: all 100ms ease-in-out;
 }
 </style>

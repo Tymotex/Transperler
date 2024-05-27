@@ -9,8 +9,17 @@
 						@transpiled="handleTranspiled"
 						:initShSourceCode="shSourceCode"
 						@shellError="handleShellErrors"
+						:isPendingTranspiling="isPendingTranspiling"
+						@updateIsPendingTranspiling="updateIsPendingTranspiling"
+						:isTranspiling="isTranspiling"
+						@updateIsTranspiling="updateIsTranspiling"
 					/>
-					<PerlOutput :plOutput="plOutput" :errMessage="errMessage" />
+					<PerlOutput
+						:plOutput="plOutput"
+						:errMessage="errMessage"
+						:isTranspiling="isTranspiling"
+						:isPendingTranspiling="isPendingTranspiling"
+					/>
 				</div>
 			</div>
 			<Footer />
@@ -78,6 +87,8 @@ elsif ($foo eq 2) {
 }
 `,
 			errMessage: '',
+			isPendingTranspiling: false,
+			isTranspiling: false,
 		};
 	},
 	methods: {
@@ -86,6 +97,12 @@ elsif ($foo eq 2) {
 		},
 		handleShellErrors(errMessage: string) {
 			this.errMessage = errMessage;
+		},
+		updateIsPendingTranspiling(newValue: boolean) {
+			this.isPendingTranspiling = newValue;
+		},
+		updateIsTranspiling(newValue: boolean) {
+			this.isTranspiling = newValue;
 		},
 	},
 });

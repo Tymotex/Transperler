@@ -1,6 +1,5 @@
 <template>
 	<div class="code-container relative">
-		<div v-if="isTranspiling">Hello world</div>
 		<prism-editor
 			class="code-editor rounded-md overflow-auto"
 			v-model="code"
@@ -8,6 +7,7 @@
 			line-numbers
 			@input="handleTyping"
 		></prism-editor>
+		<!-- <div v-if="isTranspiling">TRANSPILING</div> -->
 	</div>
 </template>
 
@@ -26,12 +26,12 @@ export default defineComponent({
 	},
 	props: {
 		initShSourceCode: String,
+		isTranspiling: Boolean,
 	},
 	data() {
-		return { code: this.initShSourceCode, typingTimer: undefined, isTranspiling: false } as {
+		return { code: this.initShSourceCode, typingTimeoutRef: undefined } as {
 			code: string;
-			typingTimer: any;
-			isTranspiling: boolean;
+			typingTimeoutRef: any;
 		};
 	},
 	methods: {
@@ -44,22 +44,28 @@ export default defineComponent({
 			// Attempt transpilation 1 second after the user has finished
 			// typing.
 			// Source: https://stackoverflow.com/questions/59711470/how-to-do-submit-form-after-user-stop-typing-in-vuejs2.
-			clearTimeout(this.typingTimer);
-			this.isTranspiling = true;
-			this.typingTimer = setTimeout(() => {
+			clearTimeout(this.typingTimeoutRef);
+			if (!this.isPendingTranspiling) {
+				this.$emit('updateIsPendingTranspiling', true);
+			}
+			this.typingTimeoutRef = setTimeout(() => {
+				if (!this.isTranspiling) {
+					this.$emit('updateIsTranspiling', true);
+				}
+				this.$emit('updateIsPendingTranspiling', false);
 				this.shellAnalysis()
 					.then(() => {
 						// If the shell source code is valid, then proceed with
 						// transpilation.
-						this.transpile();
+						this.transpile().finally(() => {
+							this.$emit('updateIsTranspiling', false);
+						});
 					})
 					.catch((err) => {
 						alert(err);
 					})
-					.finally(() => {
-						this.isTranspiling = false;
-					});
-			}, 1000);
+					.finally(() => {});
+			}, 1250);
 		},
 		async shellAnalysis() {
 			let res: any;
