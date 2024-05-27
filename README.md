@@ -4,25 +4,25 @@ that wraps around a transpiler written in Perl 5 that maps POSIX shell scripts t
 of the control structures and builtin commands in the POSIX Shell standard. Aims
 to preserve comments and indentation in the Shell source code.
 
-To start the Transperler API locally, execute the following from the project root.
-```bash
-docker-compose build
-docker-compose up -d    # The API will be listening on port 6666 by default.
-
-# To tear down the service, run:
-docker-compose down   
-```
-
 ## Transperler Service
 The Transperler Service is a simple backend server developed with Go and Gin. It
 serves as a wrapper around the shell static analyser, [ShellCheck](https://github.com/koalaman/shellcheck), and the Perl 5
 transpiler binary.
 
 **Setup & Usage**
-From `transperler-service`, run the following:
+
+To start the Transperler API locally, execute the following *from the project root*.
 ```bash
+cd transpiler-service
+docker build -t api .
+docker run -p 8080:8080 -v $PWD:/app api
+```
+
+Alternatively to using Docker, run the following:
+```bash
+cd transpiler-service
 go get .    # Fetch all third-party dependencies.
-go run .    # Start the development server at port 6666.
+go run .    # Start the development server at port 8080.
 ```
 
 To run HTTP tests, simply run `go test`.
@@ -41,6 +41,7 @@ The service exposes only two endpoints:
     - Output: `{ status: "error" | "success", message: "..." }`.
 
 ## Transperler Client
+
 The Transperler Client is a web frontend developed with Vue, Nuxt.js and
 TypeScript.
 
@@ -54,7 +55,7 @@ yarn dev
 ## Deployment
 
 The Transperler Client is deployed on Vercel. The Transperler Service is dockerised and can be deployed on AWS ECS or Google
-Cloud Run, for example. In my case, I've deployed the service on a Linux VM 
-from [Vultr](https://www.vultr.com/) and have set up NGINX as a reverse proxy to
-direct requests to the Docker container for the service. Currently, deployment
-just involves running `docker-compose up -d` or `nohup go run .`.
+Cloud Run, for example.
+I am using NGINX as a reverse proxy to direct requests to the Docker container
+for the service. Currently, deployment just involves running
+`docker-compose up -d` or `nohup go run .`.

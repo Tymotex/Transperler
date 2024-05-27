@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"transperler-service/transpiler"
 	"transperler-service/utils"
 
@@ -12,7 +13,7 @@ import (
 )
 
 const ShellAnalyserBinaryPath = "./shellAnalyser/shellcheck"
-const TempShellDir = "./.tmp-shell"
+const TempShellDir = "/tmp"
 
 type ShellAnalyserOutput struct {
 	Status string `json:"status"`
@@ -24,6 +25,7 @@ func ExtractShellSourceToTempFile(context *gin.Context) *os.File {
 
 	// Create a temporary file buffer for the shell source code. The transpiler
 	// expects a filestream, not a string.
+	os.MkdirAll(filepath.Join(".", TempShellDir), os.ModePerm)
 	tmpFile, createErr := os.CreateTemp(TempShellDir, "*.sh")
 	if createErr != nil {
 		shellAnalyserOutput.Status = "error"
@@ -60,10 +62,10 @@ func ExtractShellSourceToTempFile(context *gin.Context) *os.File {
 
 func Post(context *gin.Context) {
 	tmpFile := ExtractShellSourceToTempFile(context)
-	defer os.Remove(tmpFile.Name())
 	if tmpFile == nil {
 		return
 	}
+	defer os.Remove(tmpFile.Name())
 
 	// Execute the Shell analyser, passing in the tmp file path.
 	sourcePath := tmpFile.Name()

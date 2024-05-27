@@ -8,8 +8,8 @@ RUN apk update && apk add --no-cache 'git=~2'
 
 # Install dependencies.
 ENV GO111MODULE=on
-WORKDIR $GOPATH/src/packages/transperler/
-COPY . .
+WORKDIR /app
+COPY . /app
 
 # Fetch dependencies using go get.
 RUN go get -d -v
@@ -22,16 +22,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/main .
 ############################
 FROM alpine:3
 
-WORKDIR /
+# Install Perl.
+RUN apk update && apk add --no-cache perl
+
+WORKDIR /app
 
 # Copy our static executable.
 COPY --from=builder /go/main /go/main
 
-ENV PORT 6666
+ENV PORT 8080
 ENV GIN_MODE release
-EXPOSE 6666
-
-WORKDIR /go
+EXPOSE 8080
 
 # Run the Go Gin binary.
 ENTRYPOINT ["/go/main"]

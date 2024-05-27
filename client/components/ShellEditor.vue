@@ -50,7 +50,9 @@ export default defineComponent({
 						// transpilation.
 						this.transpile();
 					})
-					.catch((_) => {});
+					.catch((err) => {
+						alert(err);
+					});
 			}, 1000);
 		},
 		async shellAnalysis() {

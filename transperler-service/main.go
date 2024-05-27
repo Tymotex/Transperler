@@ -68,7 +68,7 @@ func main() {
 	// container unresponsive to queries. Changing it to `0.0.0.0:8080` solves
 	// this issue.
 	// Source: https://stackoverflow.com/questions/72783444/docker-go-server-does-not-respond
-	fmt.Printf("Listening at 0.0.0.0:%d", port)
+	fmt.Printf("Server started! Listening at port: %d\n", port)
 
 	router.Run(fmt.Sprintf("0.0.0.0:%d", port))
 }

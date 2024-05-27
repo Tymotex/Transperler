@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"transperler-service/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 const TranspilerBinaryPath = "./transpiler/transperler"
-const TempShellDir = "./.tmp-shell"
+const TempShellDir = "/tmp"
 
 // Note:
 // Struct tags such as json:"shSourceCode" specify what a field’s name should be
@@ -33,6 +34,7 @@ func ExtractShellSourceToTempFile(context *gin.Context) *os.File {
 
 	// Create a temporary file buffer for the shell source code. The transpiler
 	// expects a filestream, not a string.
+	os.MkdirAll(filepath.Join(".", TempShellDir), os.ModePerm)
 	tmpFile, createErr := os.CreateTemp(TempShellDir, "*.sh")
 	if createErr != nil {
 		perlOutput.Message = "Failed to create shell source file."
@@ -65,10 +67,10 @@ func ExtractShellSourceToTempFile(context *gin.Context) *os.File {
 
 func Post(context *gin.Context) {
 	tmpFile := ExtractShellSourceToTempFile(context)
-	defer os.Remove(tmpFile.Name())
 	if tmpFile == nil {
 		return
 	}
+	defer os.Remove(tmpFile.Name())
 	
 	// Execute the transpiler, passing in the tmp file path.
 	sourcePath := tmpFile.Name()
