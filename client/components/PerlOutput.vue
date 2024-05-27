@@ -1,9 +1,11 @@
 <template>
 	<div class="code-container relative">
+		<EditorLabel text="⚪ output.pl"></EditorLabel>
 		<prism-editor
 			:class="{
 				'code-editor': true,
-				'rounded-md': true,
+				'rounded-b-md': true,
+				'rounded-t-0': true,
 				'overflow-auto': true,
 				blurred: error || isTranspiling || isPendingTranspiling,
 			}"
@@ -72,6 +74,10 @@ export default defineComponent({
 </script>
 
 <style scoped lang="scss">
+.editor-label {
+	background: #191927;
+}
+
 .code-container {
 	width: 500px;
 }

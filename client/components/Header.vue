@@ -5,7 +5,7 @@
 			A transpiler written in Perl 5 that converts POSIX-compatible shell scripts into an
 			equivalent Perl 5 script.
 		</p>
-		<span aria-hidden="true" class="block text-center text-xl mb-3"> 🦪 → ⚪ </span>
+		<span aria-hidden="true" class="block text-center text-xl mb-3"> 🐚 → ⚪ </span>
 	</header>
 </template>
 <style scoped>

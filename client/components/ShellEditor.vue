@@ -1,7 +1,8 @@
 <template>
 	<div class="code-container relative">
+		<EditorLabel text="🐚 input.sh"></EditorLabel>
 		<prism-editor
-			class="code-editor rounded-md overflow-auto"
+			class="code-editor overflow-auto rounded-b-md rounded-t-0"
 			v-model="code"
 			:highlight="highlighter"
 			line-numbers
