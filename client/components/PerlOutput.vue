@@ -16,9 +16,9 @@
 			v-if="error"
 			class="error-popup absolute p-4 w-full top-1/2 transform -translate-y-1/2"
 		>
-			<div class="bg-red-500 bg-opacity-50 rounded-md p-4 max-h-56 overflow-auto">
-				<p class="mb-2">❌ Shell Script Issue.</p>
-				<pre class="p-4 text-sm text-gray-400 overflow-auto">{{ error }}</pre>
+			<div class="bg-red-500 bg-opacity-80 rounded-md p-4 max-h-56 overflow-auto">
+				<p>Shell Script Issue.</p>
+				<pre class="text-sm text-gray-400 overflow-auto">{{ error }}</pre>
 			</div>
 		</div>
 	</div>
@@ -82,6 +82,11 @@ export default defineComponent({
 	max-height: 720px !important;
 }
 .error-popup {
+	pre {
+		font-size: 10px;
+		white-space: pre-wrap;
+		line-height: normal;
+	}
 }
 </style>
 

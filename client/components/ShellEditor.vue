@@ -1,5 +1,6 @@
 <template>
 	<div class="code-container relative">
+		<div v-if="isTranspiling">Hello world</div>
 		<prism-editor
 			class="code-editor rounded-md overflow-auto"
 			v-model="code"
@@ -27,9 +28,10 @@ export default defineComponent({
 		initShSourceCode: String,
 	},
 	data() {
-		return { code: this.initShSourceCode, typingTimer: undefined } as {
+		return { code: this.initShSourceCode, typingTimer: undefined, isTranspiling: false } as {
 			code: string;
 			typingTimer: any;
+			isTranspiling: boolean;
 		};
 	},
 	methods: {
@@ -43,6 +45,7 @@ export default defineComponent({
 			// typing.
 			// Source: https://stackoverflow.com/questions/59711470/how-to-do-submit-form-after-user-stop-typing-in-vuejs2.
 			clearTimeout(this.typingTimer);
+			this.isTranspiling = true;
 			this.typingTimer = setTimeout(() => {
 				this.shellAnalysis()
 					.then(() => {
@@ -52,6 +55,9 @@ export default defineComponent({
 					})
 					.catch((err) => {
 						alert(err);
+					})
+					.finally(() => {
+						this.isTranspiling = false;
 					});
 			}, 1000);
 		},
