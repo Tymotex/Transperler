@@ -134,7 +134,7 @@ elsif ($foo eq 2) {
 </style>
 <style scoped>
 .background {
-	background-image: linear-gradient(to top, #09203f 0%, #2e5572 100%);
+	background-image: linear-gradient(to top, #081425 0%, #25455d 100%);
 	z-index: -10;
 }
 .root-page {
