@@ -98,7 +98,7 @@ export default defineComponent({
 			navigator.clipboard.writeText(this.code);
 		},
 	},
-	emits: ['transpiled', 'shellError'],
+	emits: ['transpiled', 'shellError', 'updateIsTranspiling', 'updateIsPendingTranspiling'],
 	mounted() {
 		// Forcefully remove accessibility outline on code editor.
 		document.querySelectorAll('textarea').forEach((e) => (e.style.outline = 'none'));

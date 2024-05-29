@@ -62,7 +62,7 @@ export default defineComponent({
 			return highlight(code, languages.perl, 'perl');
 		},
 		copyToClipboard() {
-			navigator.clipboard.writeText(this.code);
+			navigator.clipboard.writeText(this.code || '');
 		},
 	},
 	watch: {
