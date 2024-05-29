@@ -1,6 +1,6 @@
 <template>
 	<div class="code-container relative">
-		<EditorLabel text="⚪ output.pl"></EditorLabel>
+		<EditorLabel :handleCopyButtonClick="copyToClipboard" text="⚪ output.pl"></EditorLabel>
 		<prism-editor
 			:class="{
 				'code-editor': true,
@@ -60,6 +60,9 @@ export default defineComponent({
 	methods: {
 		highlighter(code: string) {
 			return highlight(code, languages.perl, 'perl');
+		},
+		copyToClipboard() {
+			navigator.clipboard.writeText(this.code);
 		},
 	},
 	watch: {

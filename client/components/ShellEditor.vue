@@ -1,6 +1,6 @@
 <template>
 	<div class="code-container relative">
-		<EditorLabel text="🐚 input.sh"></EditorLabel>
+		<EditorLabel :handleCopyButtonClick="copyToClipboard" text="🐚 input.sh"></EditorLabel>
 		<prism-editor
 			class="code-editor overflow-auto rounded-b-md rounded-t-0"
 			v-model="code"
@@ -63,7 +63,7 @@ export default defineComponent({
 						});
 					})
 					.catch((err) => {
-						alert(err);
+						console.log(err);
 					})
 					.finally(() => {});
 			}, 1250);
@@ -93,6 +93,9 @@ export default defineComponent({
 			} catch (err) {
 				console.log(err);
 			}
+		},
+		copyToClipboard() {
+			navigator.clipboard.writeText(this.code);
 		},
 	},
 	emits: ['transpiled', 'shellError'],
