@@ -54,6 +54,7 @@ export default defineComponent({
 					this.$emit('updateIsTranspiling', true);
 				}
 				this.$emit('updateIsPendingTranspiling', false);
+				console.log('Starting shell analysis.');
 				this.shellAnalysis()
 					.then(() => {
 						// If the shell source code is valid, then proceed with
@@ -62,10 +63,10 @@ export default defineComponent({
 							this.$emit('updateIsTranspiling', false);
 						});
 					})
-					.catch((err) => {
-						console.log(err);
-					})
-					.finally(() => {});
+					.catch((err) => {})
+					.finally(() => {
+						this.$emit('updateIsTranspiling', false);
+					});
 			}, 1250);
 		},
 		async shellAnalysis() {
