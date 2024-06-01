@@ -73,11 +73,13 @@ func Post(context *gin.Context) {
 	stdout, err := cmd.Output()
 
 	if err != nil {
+		stdout := string(stdout)
+		if stdout != "" {
+			stdout = "Shell static analyser server error."
+		}
 		shellAnalyserOutput := ShellAnalyserOutput {
 			Status: "error",
-			Message: string(stdout) ?
-				string(stdout) :
-				"Shell static analyser server error.",
+			Message: string(stdout),
 		}
 		context.JSON(http.StatusOK, shellAnalyserOutput)
 		return
