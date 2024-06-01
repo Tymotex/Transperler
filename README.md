@@ -1,4 +1,4 @@
-# Transperler 🦪🠺⚪
+# Transperler 🐚⚪
 A transpiler client (developed with Vue, Nuxt.js and TypeScript), and API (developed with Go and Gin),
 that wraps around a transpiler written in Perl 5 that maps POSIX shell scripts to their equivalent Perl 5 scripts. Supports most
 of the control structures and builtin commands in the POSIX Shell standard. Aims
@@ -10,6 +10,8 @@ serves as a wrapper around the shell static analyser, [ShellCheck](https://githu
 transpiler binary.
 
 **Setup & Usage**
+
+Install [shellcheck](https://github.com/koalaman/shellcheck) to `/usr/bin/shellcheck`.
 
 To start the Transperler API locally, execute the following *from the project root*.
 ```bash

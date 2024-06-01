@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const ShellAnalyserBinaryPath = "./shellAnalyser/shellcheck"
+const ShellAnalyserBinaryPath = "/usr/bin/shellcheck"
 const TempShellDir = "/tmp"
 
 type ShellAnalyserOutput struct {

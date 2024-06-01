@@ -61,7 +61,7 @@ func main() {
 	port, error := strconv.Atoi(os.Getenv("PORT"))
 	if error != nil {
 		fmt.Println("Couldn't retrieve the PORT environment variable. Defaulting to 8080.")
-		port = 8080
+		port = 9000
 	}
 
 	// This used to be `router.Run("localhost:8080")` but this would make the
